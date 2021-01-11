@@ -1,4 +1,5 @@
 const express = require('express');
+const cors = require('cors');
 const app = express();
 const port = 4000;
 const jwt = require('jsonwebtoken');
@@ -81,6 +82,7 @@ var root = {
     },
 };
 
+app.use(cors());
 // Create an express server and a GraphQL endpoint
 app.use(
     '/graphql',
