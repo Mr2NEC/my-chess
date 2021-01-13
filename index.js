@@ -1,7 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const app = express();
-const port = 4000;
+const PORT = process.env.PORT || 4000;
 const jwt = require('jsonwebtoken');
 const jwtSecret = 'ДЖСОНСЕКРЕТОЯЕБУ';
 
@@ -28,32 +28,7 @@ User.init(
 })();
 
 const { graphqlHTTP: express_graphql } = require('express-graphql');
-const { buildSchema } = require('graphql');
-
-const schema = buildSchema(`
-    type Query {
-        getUsers: [User]
-        getUser(id: ID!): User
-        login(login: String!, password: String!):String
-    }
-
-    type Mutation {
-        addUser(user: UserInput): User
-    }
-
-    type User {
-        id: ID,
-        login: String,
-        createdAt: String,
-        updatedAt: String
-    }
-
-    input UserInput {
-        login: String!,
-        password: String!,
-    }
-
-`);
+const schema = require('./schema.js');
 
 var root = {
     //объект соответствия названий в type Query и type Mutation с функциями-резолверами из JS-кода
@@ -76,7 +51,10 @@ var root = {
             let user = await User.findOne({ where: { login } });
             if (user && (await bcrypt.compare(password, user.password))) {
                 const { id } = user;
-                return jwt.sign({ sub: { id, roles: ['user'] } }, jwtSecret);
+                return jwt.sign(
+                    { sub: { id, login, roles: ['user'] } },
+                    jwtSecret
+                );
             }
         }
     },
@@ -103,7 +81,7 @@ app.use(
             }
         }
         return {
-            schema,
+            schema: schema(),
             rootValue: root,
             graphiql: true,
             context: { user, models },
@@ -111,6 +89,6 @@ app.use(
     })
 );
 
-app.listen(port, () => {
-    console.log(`Example app listening at http://localhost:${port}`);
+app.listen(PORT, () => {
+    console.log(`Example app listening at http://localhost:${PORT}`);
 });
