@@ -3,8 +3,7 @@ const cors = require('cors');
 const app = express();
 const PORT = process.env.PORT || 4000;
 const jwt = require('jsonwebtoken');
-const jwtSecret = 'ДЖСОНСЕКРЕТОЯЕБУ';
-
+const jwtSecret = 'b4pVmNkmbQGYkVuaakbKMDplko';
 const bcrypt = require('bcrypt');
 
 const { Sequelize, Model, DataTypes } = require('sequelize');
