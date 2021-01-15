@@ -1,6 +1,6 @@
 const express = require('express');
-const cors = require('cors');
 const app = express();
+const cors = require('cors');
 const PORT = process.env.PORT || 4000;
 const jwt = require('jsonwebtoken');
 const jwtSecret = 'b4pVmNkmbQGYkVuaakbKMDplko';
@@ -8,6 +8,19 @@ const bcrypt = require('bcrypt');
 
 const { Sequelize, Model, DataTypes } = require('sequelize');
 const sequelize = new Sequelize('mysql://mychess@localhost/mychess');
+
+const server = app.listen(PORT, () => {
+    console.log(`Example app listening at http://localhost:${PORT}`);
+});
+const io = require('socket.io')(server, {
+    cors: {
+        origin: '*',
+    },
+});
+
+io.on('connection', (socket) => {
+    console.log('user connected');
+});
 
 class User extends Model {
     get posts() {
@@ -28,6 +41,7 @@ User.init(
 
 const { graphqlHTTP: express_graphql } = require('express-graphql');
 const schema = require('./schema.js');
+const { Socket } = require('socket.io');
 
 var root = {
     //объект соответствия названий в type Query и type Mutation с функциями-резолверами из JS-кода
@@ -60,6 +74,7 @@ var root = {
 };
 
 app.use(cors());
+app.use(express.static('public'));
 // Create an express server and a GraphQL endpoint
 app.use(
     '/graphql',
@@ -87,7 +102,3 @@ app.use(
         };
     })
 );
-
-app.listen(PORT, () => {
-    console.log(`Example app listening at http://localhost:${PORT}`);
-});
