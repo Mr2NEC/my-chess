@@ -21,6 +21,7 @@ const io = require('socket.io')(server, {
 io.on('connection', (client) => {
     client.on('sendMSG', (msg) => {
         console.log(msg);
+        client.emit('sendMSG', 'ok');
     });
 });
 
@@ -37,23 +38,28 @@ User.init(
     { sequelize, modelName: 'user' }
 );
 
-(async () => {
-    await sequelize.sync();
-})();
+class Post extends Model {
+    get user(){
+        return this.getUser()
+    }
+}
+Post.init({
+    title: DataTypes.STRING,
+    text:  DataTypes.TEXT,
+  }, { sequelize, modelName: 'post'}
+);
 
+  User.hasMany(Post )
+  Post.belongsTo(User)
+
+async function sequelizeInit() {
+    await sequelize.sync();
+};
+sequelizeInit()
 const { graphqlHTTP: express_graphql } = require('express-graphql');
 const schema = require('./schema.js');
 
 var root = {
-    //объект соответствия названий в type Query и type Mutation с функциями-резолверами из JS-кода
-    async getUsers(skip, { user }) {
-        if (!user) throw new Error(`can't get userS when your anon`);
-        return User.findAll({});
-    },
-    async getUser({ id }, { user }) {
-        if (!user) throw new Error(`can't get user when your anon`);
-        return User.findByPk(id);
-    },
     async addUser({ user: { login, password } }) {
         let user = await User.findOne({ where: { login } });
         if (!user) {
@@ -62,6 +68,31 @@ var root = {
         }
         throw new Error(`Name is taken`);
     },
+    async getUsers(skip, {user}){
+        if (!user) throw new Error(`can't get userS when your anon`)
+        return User.findAll({})
+    },
+    async getUser({id}, {user}){
+        if (!user) throw new Error(`can't get user when your anon`)
+        return User.findByPk(id)
+    },
+
+    // async addPost({post:{title,text}}, {user, models: {User, Post}}){
+    //     if (!user) throw new Error(`can't post anon posts`)
+
+    //     let newPost = await user.createPost({title, text})
+    //     return newPost
+    // },
+
+    // async changePost({post:{title,text,postId}}, {user}){
+    //     if (!user) throw new Error(`can't post anon posts`)
+    //     let post = Post.findOne({where:{id: postId, userId: userId}})
+
+    //     if (!post) throw new Error(`post not found`)
+
+    //     let newPost = await user.createPost({title, text})
+    //     return newPost
+    // },
 
     async login({ login, password }) {
         if (login && password) {
