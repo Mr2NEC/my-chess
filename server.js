@@ -18,8 +18,10 @@ const io = require('socket.io')(server, {
     },
 });
 
-io.on('connection', (socket) => {
-    console.log('user connected');
+io.on('connection', (client) => {
+    client.on('sendMSG', (msg) => {
+        console.log(msg);
+    });
 });
 
 class User extends Model {
@@ -41,7 +43,6 @@ User.init(
 
 const { graphqlHTTP: express_graphql } = require('express-graphql');
 const schema = require('./schema.js');
-const { Socket } = require('socket.io');
 
 var root = {
     //объект соответствия названий в type Query и type Mutation с функциями-резолверами из JS-кода
@@ -54,9 +55,12 @@ var root = {
         return User.findByPk(id);
     },
     async addUser({ user: { login, password } }) {
-        password = await bcrypt.hash(password, 10);
-
-        return await User.create({ login, password });
+        let user = await User.findOne({ where: { login } });
+        if (!user) {
+            password = await bcrypt.hash(password, 10);
+            return await User.create({ login, password });
+        }
+        throw new Error(`Name is taken`);
     },
 
     async login({ login, password }) {
@@ -69,6 +73,7 @@ var root = {
                     jwtSecret
                 );
             }
+            throw new Error(`Incorrect login or password`);
         }
     },
 };
