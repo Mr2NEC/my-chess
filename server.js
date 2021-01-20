@@ -18,10 +18,32 @@ const io = require('socket.io')(server, {
     },
 });
 
-io.on('connection', (client) => {
-    client.on('sendMSG', (msg) => {
-        console.log(msg);
-        client.emit('sendMSG', 'ok');
+io.use(async function (socket, next) {
+    if (
+        socket.handshake.query &&
+        socket.handshake.query.token &&
+        socket.handshake.query.token.startsWith('Bearer ')
+    ) {
+        let token = socket.handshake.query.token.slice('Bearer '.length);
+        try {
+            let decoded = jwt.verify(token, jwtSecret);
+            if (decoded) {
+                let userID = await User.findByPk(decoded.sub.id);
+                return (socket.user = userID);
+            }
+        } catch (e) {
+            io.emit('error', { message: 'User is not found', error: e });
+        }
+    } else if (socket.handshake.query.token === {}) {
+        return (socket.user = 'anon');
+    } else {
+        next(new Error('Authentication error'));
+    }
+}).on('connection', function (socket) {
+    socket.on('sendMSG', async ({ chatID, message }) => {
+        console.log(chatID, message);
+        await Post.create({ chatID, text: message });
+        return socket.emit('sendMSG', 'ok');
     });
 });
 
@@ -39,23 +61,25 @@ User.init(
 );
 
 class Post extends Model {
-    get user(){
-        return this.getUser()
+    get user() {
+        return this.getUser();
     }
 }
-Post.init({
-    title: DataTypes.STRING,
-    text:  DataTypes.TEXT,
-  }, { sequelize, modelName: 'post'}
+Post.init(
+    {
+        chatID: DataTypes.INTEGER,
+        text: DataTypes.TEXT,
+    },
+    { sequelize, modelName: 'post' }
 );
 
-  User.hasMany(Post )
-  Post.belongsTo(User)
+User.hasMany(Post);
+Post.belongsTo(User);
 
 async function sequelizeInit() {
     await sequelize.sync();
-};
-sequelizeInit()
+}
+sequelizeInit();
 const { graphqlHTTP: express_graphql } = require('express-graphql');
 const schema = require('./schema.js');
 
@@ -68,13 +92,13 @@ var root = {
         }
         throw new Error(`Name is taken`);
     },
-    async getUsers(skip, {user}){
-        if (!user) throw new Error(`can't get userS when your anon`)
-        return User.findAll({})
+    async getUsers(skip, { user }) {
+        if (!user) throw new Error(`can't get userS when your anon`);
+        return User.findAll({});
     },
-    async getUser({id}, {user}){
-        if (!user) throw new Error(`can't get user when your anon`)
-        return User.findByPk(id)
+    async getUser({ id }, { user }) {
+        if (!user) throw new Error(`can't get user when your anon`);
+        return User.findByPk(id);
     },
 
     // async addPost({post:{title,text}}, {user, models: {User, Post}}){
