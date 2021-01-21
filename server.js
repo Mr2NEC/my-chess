@@ -19,6 +19,7 @@ const io = require('socket.io')(server, {
 });
 
 io.use(async function (socket, next) {
+    let user;
     if (
         socket.handshake.query &&
         socket.handshake.query.token &&
@@ -28,22 +29,28 @@ io.use(async function (socket, next) {
         try {
             let decoded = jwt.verify(token, jwtSecret);
             if (decoded) {
-                let userID = await User.findByPk(decoded.sub.id);
-                return (socket.user = userID);
+                let id = await User.findByPk(decoded.sub.id)
+                console.log(id)
+                user = await User.update({ online: true } /* set attributes' value */, 
+                        { where: { id }});
+                 console.log(user)
+                next() 
             }
         } catch (e) {
             io.emit('error', { message: 'User is not found', error: e });
         }
     } else if (socket.handshake.query.token === {}) {
-        return (socket.user = 'anon');
+        return next(socket.user = 'anon');
     } else {
         next(new Error('Authentication error'));
     }
-}).on('connection', function (socket) {
-    socket.on('sendMSG', async ({ chatID, message }) => {
+})
+
+io.on('connection', function (client) {
+    client.on('sendMSG', async ({ chatID, text }) => {
         console.log(chatID, message);
-        await Post.create({ chatID, text: message });
-        return socket.emit('sendMSG', 'ok');
+        await Post.create({ chatID, text });
+        return client.emit('sendMSG', 'ok');
     });
 });
 
@@ -56,6 +63,11 @@ User.init(
     {
         login: DataTypes.STRING,
         password: DataTypes.STRING,
+        online:{
+                type: DataTypes.BOOLEAN,
+                defaultValue: false
+              }
+
     },
     { sequelize, modelName: 'user' }
 );
@@ -88,6 +100,7 @@ var root = {
         let user = await User.findOne({ where: { login } });
         if (!user) {
             password = await bcrypt.hash(password, 10);
+
             return await User.create({ login, password });
         }
         throw new Error(`Name is taken`);
