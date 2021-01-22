@@ -18,7 +18,7 @@ const io = require('socket.io')(server, {
     },
 });
 
-io.use(async function (socket, next) {
+io.use(function (socket, next) {
     let user;
     if (
         socket.handshake.query &&
@@ -29,28 +29,29 @@ io.use(async function (socket, next) {
         try {
             let decoded = jwt.verify(token, jwtSecret);
             if (decoded) {
-                let id = await User.findByPk(decoded.sub.id)
-                console.log(id)
-                user = await User.update({ online: true } /* set attributes' value */, 
-                        { where: { id }});
-                 console.log(user)
-                next() 
+                User.findByPk(decoded.sub.id)
+                    .then((user) => {
+                        if (!user) throw new Error('User is not found');
+                        return user.id;
+                    })
+                    .then((id) =>
+                        User.update({ online: true }, { where: { id } })
+                    )
+                    .then(() => next());
             }
         } catch (e) {
             io.emit('error', { message: 'User is not found', error: e });
         }
     } else if (socket.handshake.query.token === {}) {
-        return next(socket.user = 'anon');
+        return next((user = 'anon'));
     } else {
         next(new Error('Authentication error'));
     }
-})
-
-io.on('connection', function (client) {
-    client.on('sendMSG', async ({ chatID, text }) => {
-        console.log(chatID, message);
+}).on('connection', function (socket) {
+    socket.on('sendMSG', async ({ chatID, text }) => {
+        console.log(chatID, text);
         await Post.create({ chatID, text });
-        return client.emit('sendMSG', 'ok');
+        return socket.emit('sendMSG', 'ok');
     });
 });
 
@@ -63,11 +64,10 @@ User.init(
     {
         login: DataTypes.STRING,
         password: DataTypes.STRING,
-        online:{
-                type: DataTypes.BOOLEAN,
-                defaultValue: false
-              }
-
+        online: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false,
+        },
     },
     { sequelize, modelName: 'user' }
 );
@@ -156,15 +156,13 @@ app.use(
         let user, models;
         if (auth && auth.startsWith('Bearer ')) {
             let token = auth.slice('Bearer '.length);
-            //console.log('TOKEN FROM REQUEST', token)
             try {
                 let decoded = jwt.verify(token, jwtSecret);
                 if (decoded) {
                     user = await User.findByPk(decoded.sub.id);
-                    //console.log('НЕ НАЕБАЛ', user)
                 }
             } catch (e) {
-                console.log('НАЕБАЛ', e);
+                console.log('User is not found', e);
             }
         }
         return {
