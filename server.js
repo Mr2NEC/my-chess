@@ -18,6 +18,7 @@ const io = require('socket.io')(server, {
     },
 });
 
+
 io.use(async function (socket, next) {
     if (
         socket.handshake.query &&
@@ -28,6 +29,7 @@ io.use(async function (socket, next) {
         try {
             let decoded = jwt.verify(token, jwtSecret);
             if (decoded) {
+
                 let user = await User.findByPk(decoded.sub.id)
                 if(user.dataValues.id){
                 await User.update({ online: true } /* set attributes' value */, 
@@ -52,6 +54,7 @@ io.on('sendMSG', async (message) => {
     console.log(message.handshake.auth.sub)
     await Post.create({ chatID:message.chatID, text:message.text });
     return client.emit('sendMSG', 'ok');
+
 });
 
 class User extends Model {
@@ -63,11 +66,10 @@ User.init(
     {
         login: DataTypes.STRING,
         password: DataTypes.STRING,
-        online:{
-                type: DataTypes.BOOLEAN,
-                defaultValue: false
-              }
-
+        online: {
+            type: DataTypes.BOOLEAN,
+            defaultValue: false,
+        },
     },
     { sequelize, modelName: 'user' }
 );
@@ -156,15 +158,13 @@ app.use(
         let user, models;
         if (auth && auth.startsWith('Bearer ')) {
             let token = auth.slice('Bearer '.length);
-            //console.log('TOKEN FROM REQUEST', token)
             try {
                 let decoded = jwt.verify(token, jwtSecret);
                 if (decoded) {
                     user = await User.findByPk(decoded.sub.id);
-                    //console.log('НЕ НАЕБАЛ', user)
                 }
             } catch (e) {
-                console.log('НАЕБАЛ', e);
+                console.log('User is not found', e);
             }
         }
         return {
