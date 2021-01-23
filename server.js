@@ -1,177 +1,63 @@
-const express = require('express');
-const app = express();
+const app = require('express')();
+const server = require('http').createServer(app);
 const cors = require('cors');
-const PORT = process.env.PORT || 4000;
-const jwt = require('jsonwebtoken');
-const jwtSecret = 'b4pVmNkmbQGYkVuaakbKMDplko';
 const bcrypt = require('bcrypt');
+const authValidate = require('./authValidate')
 
-const { Sequelize, Model, DataTypes } = require('sequelize');
-const sequelize = new Sequelize('mysql://mychess@localhost/mychess');
+const PORT = process.env.PORT || 4000;
+const usersArr = []
 
-const server = app.listen(PORT, () => {
-    console.log(`Example app listening at http://localhost:${PORT}`);
-});
+
 const io = require('socket.io')(server, {
     cors: {
         origin: '*',
     },
 });
 
+io.on('connection', async (client) => { 
+    usersArr.push({login: 'anon', id: -1, connectionId:client.id})
+    console.log(usersArr);
 
-io.use(async function (socket, next) {
-    if (
-        socket.handshake.query &&
-        socket.handshake.query.token &&
-        socket.handshake.query.token.startsWith('Bearer ')
-    ) {
-        let token = socket.handshake.query.token.slice('Bearer '.length);
-        try {
-            let decoded = jwt.verify(token, jwtSecret);
-            if (decoded) {
+    // client.on('message', async(data) =>{
+    //     const user = await authValidate(client)
+    //     switch (data.type) {
+    //         case "users":
+    //             client.send(users)
+    //             break;
+    //         case "signUp":
+    //             const newUser = await User.create(login, passw)
+    //             const getToken = generatorTokenow(user)
+    //             addtodb()
+    //             client.send(token)
+    //             // usersArr.replace(user -> newUser by connId)
+    //             break;
+    //         case "signIn":
+    //             const loggedUser = await User.get(login, passw)
+    //             const getToken = generatorTokenow(user)
+    //             client.send(token)
+    //             // usersArr.replace(user -> loggedUser by connId)
+    //             break;
+            
+    //         case 'sendMsg':
+    //             if (user) {
 
-                let user = await User.findByPk(decoded.sub.id)
-                if(user.dataValues.id){
-                await User.update({ online: true } /* set attributes' value */, 
-                        { where: { id }});
-                }
-                next() 
-            }
-        } catch (e) {
-            io.emit('error', { message: 'User is not found', error: e });
-        }
-    } else if (!socket.handshake.query.token) {
-        console.log('anon');
-        next();
-    } else {
-        next(new Error('Authentication error'));
-    }
-})
-io.on('connection', function (socket) {
-    console.log('user connected');
-});
-io.on('sendMSG', async (message) => {
-    console.log(message.handshake.auth.sub)
-    await Post.create({ chatID:message.chatID, text:message.text });
-    return client.emit('sendMSG', 'ok');
+    //             } else error
+    //             break;
+    //         case msg:
+                
+    //             break;
+    //         case msg:
+                
+    //             break;
+        
+    //         default:
+    //             break;
+    //     }
+    // })
 
-});
 
-class User extends Model {
-    get posts() {
-        return this.getPosts();
-    }
-}
-User.init(
-    {
-        login: DataTypes.STRING,
-        password: DataTypes.STRING,
-        online: {
-            type: DataTypes.BOOLEAN,
-            defaultValue: false,
-        },
-    },
-    { sequelize, modelName: 'user' }
-);
 
-class Post extends Model {
-    get user() {
-        return this.getUser();
-    }
-}
-Post.init(
-    {
-        chatID: DataTypes.INTEGER,
-        text: DataTypes.TEXT,
-    },
-    { sequelize, modelName: 'post' }
-);
+ });
 
-User.hasMany(Post);
-Post.belongsTo(User);
 
-async function sequelizeInit() {
-    await sequelize.sync();
-}
-sequelizeInit();
-const { graphqlHTTP: express_graphql } = require('express-graphql');
-const schema = require('./schema.js');
-
-var root = {
-    async addUser({ user: { login, password } }) {
-        let user = await User.findOne({ where: { login } });
-        if (!user) {
-            password = await bcrypt.hash(password, 10);
-
-            return await User.create({ login, password });
-        }
-        throw new Error(`Name is taken`);
-    },
-    async getUsers(skip, { user }) {
-        if (!user) throw new Error(`can't get userS when your anon`);
-        return User.findAll({});
-    },
-    async getUser({ id }, { user }) {
-        if (!user) throw new Error(`can't get user when your anon`);
-        return User.findByPk(id);
-    },
-
-    // async addPost({post:{title,text}}, {user, models: {User, Post}}){
-    //     if (!user) throw new Error(`can't post anon posts`)
-
-    //     let newPost = await user.createPost({title, text})
-    //     return newPost
-    // },
-
-    // async changePost({post:{title,text,postId}}, {user}){
-    //     if (!user) throw new Error(`can't post anon posts`)
-    //     let post = Post.findOne({where:{id: postId, userId: userId}})
-
-    //     if (!post) throw new Error(`post not found`)
-
-    //     let newPost = await user.createPost({title, text})
-    //     return newPost
-    // },
-
-    async login({ login, password }) {
-        if (login && password) {
-            let user = await User.findOne({ where: { login } });
-            if (user && (await bcrypt.compare(password, user.password))) {
-                const { id } = user;
-                return jwt.sign(
-                    { sub: { id, login, roles: ['user'] } },
-                    jwtSecret
-                );
-            }
-            throw new Error(`Incorrect login or password`);
-        }
-    },
-};
-
-app.use(cors());
-app.use(express.static('public'));
-// Create an express server and a GraphQL endpoint
-app.use(
-    '/graphql',
-    express_graphql(async (req, res) => {
-        let auth = req.headers.authorization;
-        let user, models;
-        if (auth && auth.startsWith('Bearer ')) {
-            let token = auth.slice('Bearer '.length);
-            try {
-                let decoded = jwt.verify(token, jwtSecret);
-                if (decoded) {
-                    user = await User.findByPk(decoded.sub.id);
-                }
-            } catch (e) {
-                console.log('User is not found', e);
-            }
-        }
-        return {
-            schema: schema(),
-            rootValue: root,
-            graphiql: true,
-            context: { user, models },
-        };
-    })
-);
+server.listen(PORT);
