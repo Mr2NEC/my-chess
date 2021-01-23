@@ -19,7 +19,6 @@ const io = require('socket.io')(server, {
 });
 
 io.use(async function (socket, next) {
-    let user;
     if (
         socket.handshake.query &&
         socket.handshake.query.token &&
@@ -29,29 +28,30 @@ io.use(async function (socket, next) {
         try {
             let decoded = jwt.verify(token, jwtSecret);
             if (decoded) {
-                let id = await User.findByPk(decoded.sub.id)
-                console.log(id)
-                user = await User.update({ online: true } /* set attributes' value */, 
+                let user = await User.findByPk(decoded.sub.id)
+                if(user.dataValues.id){
+                await User.update({ online: true } /* set attributes' value */, 
                         { where: { id }});
-                 console.log(user)
+                }
                 next() 
             }
         } catch (e) {
             io.emit('error', { message: 'User is not found', error: e });
         }
-    } else if (socket.handshake.query.token === {}) {
-        return next(socket.user = 'anon');
+    } else if (!socket.handshake.query.token) {
+        console.log('anon');
+        next();
     } else {
         next(new Error('Authentication error'));
     }
 })
-
-io.on('connection', function (client) {
-    client.on('sendMSG', async ({ chatID, text }) => {
-        console.log(chatID, message);
-        await Post.create({ chatID, text });
-        return client.emit('sendMSG', 'ok');
-    });
+io.on('connection', function (socket) {
+    console.log('user connected');
+});
+io.on('sendMSG', async (message) => {
+    console.log(message.handshake.auth.sub)
+    await Post.create({ chatID:message.chatID, text:message.text });
+    return client.emit('sendMSG', 'ok');
 });
 
 class User extends Model {
