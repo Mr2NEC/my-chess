@@ -66,10 +66,11 @@ io.on('connection', async (client) => {
                     break;
             
                 default:
+                    console.log(data.type);
                     break;
             }
         }catch(e){
-            client.emit('error', e.message)
+            client.emit(data.type, e.message)
         }
     })
  });
