@@ -6,7 +6,7 @@ const {addUser} = require('./sequelize/action/addUser')
 const loginUser = require('./sequelize/action/loginUser')
 
 const {PORT} = require("./defaults.json");
-const usersArr = []
+let usersArr = []
 
 
 const io = require('socket.io')(server, {
@@ -18,68 +18,58 @@ const io = require('socket.io')(server, {
 
 io.on('connection', async (client) => { 
     let anon = {login: 'anon', id: -1, connectionId:client.id}
-    let clientId = client.handshake.auth.connectionId
-    console.log(clientId);
-    console.log(client.id);
-
-    if(clientId && clientId !== client.id && usersArr.length !== 0){
-        usersArr.map(user => {
-            if(user.connectionId === clientId){
-                user.connectionId = client.id;
-                io.emit('connection', {...user})
-            }})
-    }else{
-        console.log('123');
-        usersArr.push(anon);
-        io.emit('connection', {...anon})
-    }
-
+    usersArr.push(anon);
     console.log(usersArr);
-    client.on('!connectionId', (id)=>{let index = usersArr.findIndex((user) => user.connectionId === id); console.log(index,usersArr);})
+    client.on('disconnect', ()=>{
+        usersArr = usersArr.filter((user)=>user.connectionId !== client.id );   
+    })
 
     client.on('message', async(data) =>{
         const user = await tokenValidate(client)
-        switch (data.type) {
-            case "users":
-                client.send(users)
-                break;
-            case "LOGIN":
-                const newUser = await addUser(data.login, data.password)
-                   if(!newUser.error){
-                       io.emit(`{data.type}`, 200);
-                       break;
-                    }
-                   io.emit(`{data.type}`, newUser.error)
-                break;
-            case "REGISTER":
-                const loggedUser = await loginUser(data.login, data.password)
-                if(!loggedUser.error){
-                       io.emit(data.type, loggedUser);
-                       usersArr.map(user => {
-                    if(user.connectionId === client.id){
-                        user.id = loggedUser.id;
-                        user.login = loggedUser.login
-                    }
+        if(user.id !== -1){
+            const fUser =  usersArr.find((u)=>{
+                u.connectionId === client.id;
             })
-                       break;
-                    }
-                io.emit(data.type, loggedUser.error)
-                break;
-            case "LOGOUT":
+            if(fUser){
+                fUser = {...fUser, ...user}
+            }
+        }
+        try{
+            switch (data.type) {
+                case "users":
+                    client.send(users)
+                    break;
+                case "REGISTER":
+                    await addUser(data.login, data.password)
+                    io.emit(data.type, 200);
+                    break;
+                case "LOGIN":
+                    const loggedUser = await loginUser(data.login, data.password)
+                        io.emit(data.type, loggedUser);
+                        usersArr.map(user => {
+                        if(user.connectionId === client.id){
+                            user.id = loggedUser.id;
+                            user.login = loggedUser.login
+                        }})
+                    break;
+                case "LOGOUT":
+                    
+                    break;
                 
-                break;
-            
-            case 'SENDMSG':
-                if (user) {
+                case 'SENDMSG':
+                    if (user) {
 
-                } else error
-                break;
-            case msg:
-                
-                break;
-        
-            default:
-                break;
+                    } else error
+                    break;
+                case msg:
+                    
+                    break;
+            
+                default:
+                    break;
+            }
+        }catch(e){
+            client.emit('error', e.message)
         }
     })
  });

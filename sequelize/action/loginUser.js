@@ -3,22 +3,17 @@ const {bcrypt} = require("./addUser");
 const {jwt} = require("../../authValidate");
 
 const loginUser = async( login, password )=>{
-    try{
     if (login && password) {
-        let user = await User.findOne({ where: { login } });
-        if (user && (await bcrypt.compare(password, user.password))) {
-            const { id } = user;
-            return {
-                id:id,
-                login:login,
-                token:jwt.sign({ sub: { id, login} },jwtSecret)
-            };
-        }
-        throw new Error(`Incorrect login or password`);
-    }}
-    catch(e){
-        return {error: e}
+        const newPassword = await bcrypt.hash(password, 10);
+        let user = await User.findOne({ where: { login, password:newPassword } });
+        if(!user) throw new Error(`Incorrect login or password`);
+        return {
+            id:user.id,
+            login:user.login,
+            token:jwt.sign({ sub: { id:user.id, login:user.login} },jwtSecret)
+        };
     }
+
 
 }
 
