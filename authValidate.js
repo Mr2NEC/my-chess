@@ -1,8 +1,8 @@
 const jwt = require('jsonwebtoken');
-const User = require('./sequelize/userSchema');
-const jwtSecret = 'b4pVmNkmbQGYkVuaakbKMDplko';
+const User = require('./sequelize/schema/userSchema');
+const {jwtSecret} = require("./defaults.json");
 
-async function  authValidate(socket){
+async function  tokenValidate(socket){
         try {
             const token = socket.handshake.query.token.slice('Bearer '.length);
             const decoded = jwt.verify(token, jwtSecret);
@@ -17,4 +17,4 @@ async function  authValidate(socket){
 
 }
 
-module.exports = authValidate
+module.exports = {tokenValidate,jwt}

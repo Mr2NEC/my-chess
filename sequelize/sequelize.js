@@ -1,6 +1,7 @@
 
 const { Sequelize } = require('sequelize');
-const sequelize = new Sequelize('mysql://mychess@localhost/mychess');
+const {mysql} = require("../defaults.json");
+const sequelize = new Sequelize(mysql);
 
 
 sequelize.sync().then(_=>console.log('ok')).catch(e=>console.log(e))

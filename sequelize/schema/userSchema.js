@@ -1,5 +1,5 @@
 const { DataTypes } = require('sequelize');
-const sequelize = require('./sequelize')
+const sequelize = require('../sequelize')
 const Post = require('./postSchema')
 
 const User = sequelize.define('User', {
@@ -13,6 +13,7 @@ const User = sequelize.define('User', {
     }
   }, 
 );
+
 
 User.hasMany(Post);
 Post.belongsTo(User);

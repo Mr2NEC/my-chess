@@ -1,10 +1,11 @@
 const app = require('express')();
 const server = require('http').createServer(app);
 const cors = require('cors');
-const bcrypt = require('bcrypt');
-const authValidate = require('./authValidate')
+const {tokenValidate} = require('./authValidate')
+const {addUser} = require('./sequelize/action/addUser')
+const loginUser = require('./sequelize/action/loginUser')
 
-const PORT = process.env.PORT || 4000;
+const {PORT} = require("./defaults.json");
 const usersArr = []
 
 
@@ -14,50 +15,74 @@ const io = require('socket.io')(server, {
     },
 });
 
+
 io.on('connection', async (client) => { 
-    usersArr.push({login: 'anon', id: -1, connectionId:client.id})
+    let anon = {login: 'anon', id: -1, connectionId:client.id}
+    let clientId = client.handshake.auth.connectionId
+    console.log(clientId);
+    console.log(client.id);
+
+    if(clientId && clientId !== client.id && usersArr.length !== 0){
+        usersArr.map(user => {
+            if(user.connectionId === clientId){
+                user.connectionId = client.id;
+                io.emit('connection', {...user})
+            }})
+    }else{
+        console.log('123');
+        usersArr.push(anon);
+        io.emit('connection', {...anon})
+    }
+
     console.log(usersArr);
+    client.on('!connectionId', (id)=>{let index = usersArr.findIndex((user) => user.connectionId === id); console.log(index,usersArr);})
 
-    // client.on('message', async(data) =>{
-    //     const user = await authValidate(client)
-    //     switch (data.type) {
-    //         case "users":
-    //             client.send(users)
-    //             break;
-    //         case "signUp":
-    //             const newUser = await User.create(login, passw)
-    //             const getToken = generatorTokenow(user)
-    //             addtodb()
-    //             client.send(token)
-    //             // usersArr.replace(user -> newUser by connId)
-    //             break;
-    //         case "signIn":
-    //             const loggedUser = await User.get(login, passw)
-    //             const getToken = generatorTokenow(user)
-    //             client.send(token)
-    //             // usersArr.replace(user -> loggedUser by connId)
-    //             break;
+    client.on('message', async(data) =>{
+        const user = await tokenValidate(client)
+        switch (data.type) {
+            case "users":
+                client.send(users)
+                break;
+            case "LOGIN":
+                const newUser = await addUser(data.login, data.password)
+                   if(!newUser.error){
+                       io.emit(`{data.type}`, 200);
+                       break;
+                    }
+                   io.emit(`{data.type}`, newUser.error)
+                break;
+            case "REGISTER":
+                const loggedUser = await loginUser(data.login, data.password)
+                if(!loggedUser.error){
+                       io.emit(data.type, loggedUser);
+                       usersArr.map(user => {
+                    if(user.connectionId === client.id){
+                        user.id = loggedUser.id;
+                        user.login = loggedUser.login
+                    }
+            })
+                       break;
+                    }
+                io.emit(data.type, loggedUser.error)
+                break;
+            case "LOGOUT":
+                
+                break;
             
-    //         case 'sendMsg':
-    //             if (user) {
+            case 'SENDMSG':
+                if (user) {
 
-    //             } else error
-    //             break;
-    //         case msg:
+                } else error
+                break;
+            case msg:
                 
-    //             break;
-    //         case msg:
-                
-    //             break;
+                break;
         
-    //         default:
-    //             break;
-    //     }
-    // })
-
-
-
+            default:
+                break;
+        }
+    })
  });
 
 
-server.listen(PORT);
+server.listen(process.env.PORT || PORT);
