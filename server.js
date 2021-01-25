@@ -51,7 +51,7 @@ io.on('connection', async (client) => {
                     );
                     io.emit('message', {
                         type: data.type,
-                        ...loginUser,
+                        payload: loggedUser.token,
                     });
                     usersArr.map((user) => {
                         if (user.connectionId === client.id) {
