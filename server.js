@@ -1,13 +1,11 @@
 const app = require('express')();
 const server = require('http').createServer(app);
-const cors = require('cors');
-const {tokenValidate} = require('./authValidate')
-const {addUser} = require('./sequelize/action/addUser')
-const loginUser = require('./sequelize/action/loginUser')
+const { tokenValidate } = require('./authValidate');
+const { addUser } = require('./sequelize/action/addUser');
+const loginUser = require('./sequelize/action/loginUser');
 
-const {PORT} = require("./defaults.json");
-let usersArr = []
-
+const { PORT } = require('./defaults.json');
+let usersArr = [];
 
 const io = require('socket.io')(server, {
     cors: {
@@ -15,66 +13,57 @@ const io = require('socket.io')(server, {
     },
 });
 
+io.on('connection', async (client) => {
+    let user = await tokenValidate(client);
 
-io.on('connection', async (client) => { 
-    let anon = {login: 'anon', id: -1, connectionId:client.id}
-    usersArr.push(anon);
-    console.log(usersArr);
-    client.on('disconnect', ()=>{
-        usersArr = usersArr.filter((user)=>user.connectionId !== client.id );   
-    })
+    if (user) {
+        usersArr.push({
+            login: user.login,
+            id: user.id,
+            connectionId: client.id,
+        });
+    } else {
+        usersArr.push({ login: 'anon', id: -1, connectionId: client.id });
+    }
 
-    client.on('REGISTER',data, async( fn) => {
+    client.on('disconnect', () => {
+        usersArr = usersArr.filter((user) => user.connectionId !== client.id);
+        console.log(usersArr);
+    });
+
+    try {
+        client.on('REGISTER', async (data, callback) => {
             await addUser(data.login, data.password);
-            fn(200);
-           });
+            callback({
+                status: 200,
+            });
+        });
 
-    client.on('message', async(data) =>{
-        const user = await tokenValidate(client)
-        if(user.id !== -1){
-            const fUser =  usersArr.find((u)=>{
-                u.connectionId === client.id;
-            })
-            if(fUser){
-                fUser = {...fUser, ...user}
-            }
-        }
-        try{
-            switch (data.type) {
-                case "users":
-                    client.send(users)
-                    break;
-                case "LOGIN":
-                    const loggedUser = await loginUser(data.login, data.password)
-                        io.emit(data.type, loggedUser);
-                        usersArr.map(user => {
-                        if(user.connectionId === client.id){
-                            user.id = loggedUser.id;
-                            user.login = loggedUser.login
-                        }})
-                    break;
-                case "LOGOUT":
-                    
-                    break;
-                
-                case 'SENDMSG':
-                    if (user) {
+        client.on('LOGIN', async (data) => {
+            const loggedUser = await loginUser(data.login, data.password);
+            user = loggedUser.user;
+            io.emit('LOGIN', loggedUser.token);
+            usersArr.map((item) => {
+                if (item.connectionId === client.id) {
+                    item.id = user.id;
+                    item.login = user.login;
+                }
+            });
+        });
 
-                    } else error
-                    break;
-                case msg:
-                    
-                    break;
-            
-                default:
-                    console.log(data.type);
-                    break;
-            }
-        }catch(e){
-            client.emit(data.type, e.message)
-        }
-    })
- });
-
+        client.on('LOGOUT', () => {
+            user = null;
+            usersArr.map((item) => {
+                if (item.connectionId === client.id) {
+                    item.login = 'anon';
+                    item.id = -1;
+                }
+            });
+        });
+    } catch (e) {
+        console.log(e.message);
+        // client.emit('ERROR', e.message);
+    }
+});
 
 server.listen(process.env.PORT || PORT);

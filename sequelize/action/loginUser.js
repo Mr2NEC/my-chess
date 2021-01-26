@@ -10,8 +10,7 @@ const loginUser = async (login, password) => {
             if (user && (await bcrypt.compare(password, user.password))) {
                 const { id } = user;
                 return {
-                    id: id,
-                    login: login,
+                    user,
                     token: jwt.sign({ sub: { id, login } }, jwtSecret),
                 };
             }
