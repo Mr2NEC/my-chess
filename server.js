@@ -76,11 +76,14 @@ io.on('connection', async (client) => {
         });
 
         client.on("PROPOSEPLAY", (anotherSocketId) => {
-            client.to(anotherSocketId).emit("PROPOSEPLAY", {connectionId:client.id, login:user.login})
+            client.to(anotherSocketId).emit("PROPOSEPLAY", {connectionId:client.id, login:user.login, status:true})
         });
 
         client.on("CREATEGAME", async(data) => {
             console.log(data);
+            if(data.status === false){
+                client.emit("PROPOSEPLAY", { status:false})
+            }
             // const roomId = await user.createGame()
             // client.to(data.anotherSocketId).emit("CREATEGAME", {connectionId:client.id, roomId:roomId})
         });
