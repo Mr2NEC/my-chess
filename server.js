@@ -16,6 +16,7 @@ const io = require('socket.io')(server, {
 
 io.on('connection', async (client) => {
     let user = await tokenValidate(client);
+    let game = null;
 
     if (user) {
         usersArr.push({
@@ -76,23 +77,33 @@ io.on('connection', async (client) => {
         });
 
         client.on("PROPOSEPLAY", (anotherSocketId) => {
-            client.to(anotherSocketId).emit("PROPOSEPLAY", {connectionId:client.id, login:user.login, status:true})
+            client.to(anotherSocketId).emit("PROPOSEPLAY", {connectionId:client.id, login:user.login, show:true})
         });
 
-        client.on("CREATEGAME", async(data) => {
+        client.on("GAMEINIT", async(data) => {
             console.log(data);
-            if(data.status === false){
-                client.emit("PROPOSEPLAY", { status:false})
+            if(user && !game){
+            if(data.status === true){
+                const anotherUser = usersArr.find(item=>item.connectionId === data.anotherSocketId)
+                game = await user.createGame({completed: false,winner:null,movements:'[]'})
+                game.blackId  = Math.random() > 0.5 ? user.id : anotherUser.id
+                game.whiteId = game.blackId === anotherUser.id ? user.id : anotherUser.id
+                await game.save();
+
+                client.emit("PROPOSEPLAY", { show:false})
+                client.emit("GAMEINIT", {gameId: game.id, turn: game.whiteId, status:true})
+                client.to(data.anotherSocketId).emit("GAMEINIT", {gameId: game.id, turn: game.whiteId, status:true})
+            }else{
+                client.emit("PROPOSEPLAY", { show:false})
+            //    client.to(data.anotherSocketId).emit("ERROR", 'User doesn't want to play')
             }
-            // const roomId = await user.createGame()
-            // client.to(data.anotherSocketId).emit("CREATEGAME", {connectionId:client.id, roomId:roomId})
+            }
         });
 
     } catch (e) {
         console.log(e.message);
         // client.emit('ERROR', e.message);
     }
-    console.log(usersArr);
 });
  
 server.listen(process.env.PORT || PORT);
