@@ -30,6 +30,4 @@ Game.hasMany(Post);
 Game.belongsTo(User, {as: 'black'})
 Game.belongsTo(User, {as: 'white'})
 
-// console.log(Game.prototype)
-
 module.exports = User

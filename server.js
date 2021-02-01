@@ -1,6 +1,7 @@
 const app = require('express')();
 const server = require('http').createServer(app);
 const { tokenValidate } = require('./authValidate');
+const gameInit = require('./gameInit');
 const { addUser } = require('./sequelize/action/addUser');
 const loginUser = require('./sequelize/action/loginUser');
 const jsChess = require('js-chess-engine')
@@ -82,7 +83,7 @@ io.on('connection', async (client) => {
             client.to(anotherSocketId).emit("PROPOSEPLAY", {connectionId:client.id, login:user.login, show:true})
         });
 
-        client.on("move", ({from, to}) => {
+        client.on("MOVE", ({from, to}) => {
             try {
                 rg.move(from, to);
                 const gameState = rg.exportJson()
@@ -92,9 +93,9 @@ io.on('connection', async (client) => {
             }
         });
 
-        client.on("JOINROOM", (room) => {
-            client.join(room)
-            console.log(client.id)
+        client.on("JOINROOM", async (room) => {
+            game = await gameInit(user.id, room)
+            client.join(`room${room}`)
         });
 
         client.on("GAMEDBINIT", async(data) => {
@@ -104,7 +105,7 @@ io.on('connection', async (client) => {
                 const anotherUser = usersArr.find(item=>item.connectionId === data.anotherSocketId)
                 game = await user.createGame({completed: false,winner:null,movements:'[]'})
                 game.blackId  = Math.random() > 0.5 ? user.id : anotherUser.id
-                game.whiteId = game.blackId === user.id ? user.id : anotherUser.id
+                game.whiteId = game.blackId === user.id ? anotherUser.id : user.id
 
                 await game.save();
                 rg = new jsChess.Game();
@@ -120,8 +121,11 @@ io.on('connection', async (client) => {
             }
             }
         });
-        client.on("SENDMSG", (msg) => {
-            client.to(anotherSocketId).emit("PROPOSEPLAY", {connectionId:client.id, login:user.login, show:true})
+        client.on("SENDMSG", async (text) => {
+            let post = await user.createPost({text:text});
+            post.GameId = game.id;
+            await post.save();
+             io.to(`room${game.id}`).emit("SENDMSG", {id:post.id ,userId:post.UserId, login:user.login,text: post.text, timestamp:post.createdAt});
         });
 
     } catch (e) {
