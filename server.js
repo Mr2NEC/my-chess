@@ -3,6 +3,7 @@ const server = require('http').createServer(app);
 const { tokenValidate } = require('./authValidate');
 const { addUser } = require('./sequelize/action/addUser');
 const loginUser = require('./sequelize/action/loginUser');
+const jsChess = require('js-chess-engine')
 
 const { PORT } = require('./defaults.json');
 const User = require('./sequelize/schema/userSchema');
@@ -17,6 +18,7 @@ const io = require('socket.io')(server, {
 io.on('connection', async (client) => {
     let user = await tokenValidate(client);
     let game = null;
+    let rg = null;
 
     if (user) {
         usersArr.push({
@@ -80,24 +82,46 @@ io.on('connection', async (client) => {
             client.to(anotherSocketId).emit("PROPOSEPLAY", {connectionId:client.id, login:user.login, show:true})
         });
 
-        client.on("GAMEINIT", async(data) => {
+        client.on("move", ({from, to}) => {
+            try {
+                rg.move(from, to);
+                const gameState = rg.exportJson()
+                console.log(gameState)
+            }catch (e){
+                console.log(e)
+            }
+        });
+
+        client.on("JOINROOM", (room) => {
+            client.join(room)
+            console.log(client.id)
+        });
+
+        client.on("GAMEDBINIT", async(data) => {
             console.log(data);
             if(user && !game){
             if(data.status === true){
                 const anotherUser = usersArr.find(item=>item.connectionId === data.anotherSocketId)
                 game = await user.createGame({completed: false,winner:null,movements:'[]'})
                 game.blackId  = Math.random() > 0.5 ? user.id : anotherUser.id
-                game.whiteId = game.blackId === anotherUser.id ? user.id : anotherUser.id
-                await game.save();
+                game.whiteId = game.blackId === user.id ? user.id : anotherUser.id
 
+                await game.save();
+                rg = new jsChess.Game();
+                const gameState = rg.exportJson()
                 client.emit("PROPOSEPLAY", { show:false})
-                client.emit("GAMEINIT", {gameId: game.id, turn: game.whiteId, status:true})
-                client.to(data.anotherSocketId).emit("GAMEINIT", {gameId: game.id, turn: game.whiteId, status:true})
+                client.emit("GAMEDBINIT", {gameId: game.id, color: game.blackId === user.id ? 'black' : 'white', status:true})
+                client.to(data.anotherSocketId).emit("GAMEDBINIT", {gameId: game.id, color: game.blackId === user.id ? 'white' : 'black', status:true})
+                client.emit("GAME", {...gameState});
+                client.to(data.anotherSocketId).emit("GAME", {...gameState});
             }else{
                 client.emit("PROPOSEPLAY", { show:false})
             //    client.to(data.anotherSocketId).emit("ERROR", 'User doesn't want to play')
             }
             }
+        });
+        client.on("SENDMSG", (msg) => {
+            client.to(anotherSocketId).emit("PROPOSEPLAY", {connectionId:client.id, login:user.login, show:true})
         });
 
     } catch (e) {
