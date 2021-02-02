@@ -83,44 +83,47 @@ io.on('connection', async (client) => {
             client.to(anotherSocketId).emit("PROPOSEPLAY", {connectionId:client.id, login:user.login, show:true})
         });
 
-        client.on("MOVE", ({from, to}) => {
-            try {
-                rg.move(from, to);
-                const gameState = rg.exportJson()
-                console.log(gameState)
-            }catch (e){
-                console.log(e)
-            }
+        client.on("MOVE", async({from,to}) => {
+            io.to(`room${game.id}`).emit("MOVE", {from,to})
+            game = await gameInit(user.id, game.id)
+            const movementsNow = JSON.parse(game.movements);
+            movementsNow.push({from,to})
+            game.movements = JSON.stringify(movementsNow);
+            await game.save();
+        });
+
+        client.on("GAME", ({from,to}) => {
+            rg.move(from,to);
+            const gameState = rg.exportJson();
+            io.to(`room${game.id}`).emit("GAME", {...gameState})
         });
 
         client.on("JOINROOM", async (room) => {
             game = await gameInit(user.id, room)
             client.join(`room${room}`)
+            rg = new jsChess.Game();
+            const gameState = rg.exportJson();
+            io.to(`room${game.id}`).emit("GAME", {...gameState});
         });
 
         client.on("GAMEDBINIT", async(data) => {
-            console.log(data);
             if(user && !game){
             if(data.status === true){
                 const anotherUser = usersArr.find(item=>item.connectionId === data.anotherSocketId)
                 game = await user.createGame({completed: false,winner:null,movements:'[]'})
                 game.blackId  = Math.random() > 0.5 ? user.id : anotherUser.id
-                game.whiteId = game.blackId === user.id ? anotherUser.id : user.id
-
+                game.whiteId = game.blackId === user.id ? anotherUser.id : user.id;
                 await game.save();
-                rg = new jsChess.Game();
-                const gameState = rg.exportJson()
                 client.emit("PROPOSEPLAY", { show:false})
                 client.emit("GAMEDBINIT", {gameId: game.id, color: game.blackId === user.id ? 'black' : 'white', status:true})
                 client.to(data.anotherSocketId).emit("GAMEDBINIT", {gameId: game.id, color: game.blackId === user.id ? 'white' : 'black', status:true})
-                client.emit("GAME", {...gameState});
-                client.to(data.anotherSocketId).emit("GAME", {...gameState});
             }else{
                 client.emit("PROPOSEPLAY", { show:false})
             //    client.to(data.anotherSocketId).emit("ERROR", 'User doesn't want to play')
             }
             }
         });
+
         client.on("SENDMSG", async (text) => {
             let post = await user.createPost({text:text});
             post.GameId = game.id;

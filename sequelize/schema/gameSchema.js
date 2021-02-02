@@ -6,7 +6,10 @@ class Game extends Model {}
 Game.init({
     completed:DataTypes.BOOLEAN,
     winnerId:DataTypes.INTEGER,
-    movements:DataTypes.TEXT,
+    movements: {
+        type: DataTypes.TEXT,
+        defaultValue: '[]'
+    }
 }, {
     sequelize,
     modelName: 'Game'
