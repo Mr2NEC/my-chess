@@ -8,9 +8,9 @@ async function tokenValidate(socket) {
         const decoded = jwt.verify(token, jwtSecret);
         if (decoded) {
             const user = await User.findByPk(decoded.sub.id);
-            if (!user) throw new Error(`BAD User`);
             return user;
         }
+        return null
     } catch (e) {
         return null;
     }
