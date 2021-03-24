@@ -2,18 +2,19 @@ const app = require('express')();
 const server = require('http').createServer(app);
 const { tokenValidate } = require('./authValidate');
 const gameInit = require('./gameInit');
-const { addUser } = require('./sequelize/action/addUser');
-const loginUser = require('./sequelize/action/loginUser');
+const { signUpUser } = require('./sequelize/action/signUpUser');
+const signInUser = require('./sequelize/action/signInUser');
 const jsChess = require('js-chess-engine');
 
 const { PORT } = require('./defaults.json');
-let usersArr = [];
 
 const io = require('socket.io')(server, {
     cors: {
         origin: '*',
     },
 });
+
+let usersArr = [];
 
 io.on('connection', async (client) => {
     try {
@@ -22,7 +23,7 @@ io.on('connection', async (client) => {
         let rg = null;
 
         const userInOnline = usersArr.find((item) =>
-            user ? item.id === user.id : null
+            user ? item.id === user.id : null,
         );
 
         if (userInOnline && user) {
@@ -37,14 +38,12 @@ io.on('connection', async (client) => {
                 inGame: false,
                 connectionId: client.id,
             });
-            client.broadcast.emit('USERONLINEADD', [
-                {
-                    login: user.login,
-                    id: user.id,
-                    inGame: false,
-                    connectionId: client.id,
-                },
-            ]);
+            client.broadcast.emit('USERONLINEADD', {
+                login: user.login,
+                id: user.id,
+                inGame: false,
+                connectionId: client.id,
+            });
         } else {
             usersArr.push({
                 login: 'anon',
@@ -58,21 +57,21 @@ io.on('connection', async (client) => {
             (item) =>
                 item.id !== -1 &&
                 item.connectionId !== client.id &&
-                item.inGame !== true
+                item.inGame !== true,
         );
 
         client.emit('USERONLINE', authUsersArr);
 
         client.on('disconnect', () => {
             usersArr = usersArr.filter(
-                (user) => user.connectionId !== client.id
+                (user) => user.connectionId !== client.id,
             );
             client.broadcast.emit('USERONLINEDEL', client.id);
         });
 
         client.on('REGISTER', async (data, callback) => {
             try {
-                await addUser(data.login, data.password);
+                await signUpUser(data.login, data.password);
                 callback({
                     status: 200,
                 });
@@ -83,9 +82,9 @@ io.on('connection', async (client) => {
 
         client.on('LOGIN', async ({ login, password }) => {
             try {
-                const loggedUser = await loginUser(login, password);
+                const loggedUser = await signInUser(login, password);
                 const userInOnline = usersArr.find(
-                    (item) => item.id === loggedUser.user.id
+                    (item) => item.id === loggedUser.user.id,
                 );
                 if (userInOnline)
                     throw new Error('The user is already online.');
@@ -96,7 +95,7 @@ io.on('connection', async (client) => {
                         item.id = user.id;
                         item.login = user.login;
                         item.inGame = false;
-                        client.broadcast.emit('USERONLINEADD', [item]);
+                        client.broadcast.emit('USERONLINEADD', item);
                     }
                 });
             } catch (e) {
@@ -179,7 +178,7 @@ io.on('connection', async (client) => {
                 rg = new jsChess.Game();
                 if (!rg)
                     throw new Error(
-                        'An error occurred while creating the game.'
+                        'An error occurred while creating the game.',
                     );
                 const gameState = rg.exportJson();
                 io.to(`room${game.id}`).emit('GAME', { ...gameState });
@@ -193,7 +192,8 @@ io.on('connection', async (client) => {
                 if (user && !game) {
                     if (data.status === true) {
                         const anotherUser = usersArr.find(
-                            (item) => item.connectionId === data.anotherSocketId
+                            (item) =>
+                                item.connectionId === data.anotherSocketId,
                         );
                         game = await user.createGame({
                             completed: false,
@@ -202,7 +202,7 @@ io.on('connection', async (client) => {
                         });
                         if (!game)
                             throw new Error(
-                                'An error occurred while creating the game.'
+                                'An error occurred while creating the game.',
                             );
                         game.blackId =
                             Math.random() > 0.5 ? user.id : anotherUser.id;
@@ -261,7 +261,7 @@ io.on('connection', async (client) => {
                     usersArr.map((item) => {
                         if (item.connectionId === client.id) {
                             item.inGame = false;
-                            client.broadcast.emit('USERONLINEADD', [item]);
+                            client.broadcast.emit('USERONLINEADD', item);
                         }
                     });
                 }

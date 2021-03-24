@@ -1,16 +1,19 @@
 const { jwtSecret } = require('../../defaults.json');
-const { bcrypt } = require('./addUser');
+const { bcrypt } = require('./signUpUser');
 const { jwt } = require('../../authValidate');
 const User = require('../schema/userSchema');
 
-const loginUser = async (login, password) => {
+const signInUser = async (login, password) => {
     if (login && password) {
         if (login && password) {
-            let user = await User.findOne({ where: { login } });
-            if (user && (await bcrypt.compare(password, user.password))) {
-                const { id } = user;
+            let loggedUser = await User.findOne({ where: { login } });
+            if (
+                loggedUser &&
+                (await bcrypt.compare(password, loggedUser.password))
+            ) {
+                const { id } = loggedUser;
                 return {
-                    user,
+                    loggedUser,
                     token: jwt.sign({ sub: { id, login } }, jwtSecret),
                 };
             }
@@ -19,4 +22,4 @@ const loginUser = async (login, password) => {
     }
 };
 
-module.exports = loginUser;
+module.exports = signInUser;

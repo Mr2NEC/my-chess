@@ -1,7 +1,7 @@
 const User = require('../schema/userSchema');
 const bcrypt = require('bcrypt');
 
-const addUser = async (login, password) => {
+const signUpUser = async (login, password) => {
     let user = await User.findOne({ where: { login } });
     if (user) {
         throw new Error(`Name is taken`);
@@ -10,4 +10,4 @@ const addUser = async (login, password) => {
     return await User.create({ login, password: newPassword });
 };
 
-module.exports = { addUser, bcrypt };
+module.exports = { signUpUser, bcrypt };
