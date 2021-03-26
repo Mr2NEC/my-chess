@@ -1,8 +1,11 @@
 const app = require('express')();
 const server = require('http').createServer(app);
-
+const { graphqlHTTP: express_graphql } = require('express-graphql');
 const { tokenValidate } = require('./authValidate');
+const userAuth = require('./userAuth');
 const gameInit = require('./gameInit');
+const schema = require('./gqlSchema');
+const root = require('./gql');
 const { signUpUser } = require('./sequelize/action/signUpUser');
 const signInUser = require('./sequelize/action/signInUser');
 const Users = require('./users');
@@ -15,6 +18,21 @@ const io = require('socket.io')(server, {
 });
 
 const users = new Users();
+let user;
+
+app.use(
+    '/graphql',
+    express_graphql(async (req, res) => {
+        let auth = req.headers.authorization;
+        user = await userAuth(auth);
+        return {
+            schema,
+            rootValue: root,
+            graphiql: true,
+            context: { user },
+        };
+    }),
+);
 
 io.on('connection', async (client) => {
     try {
@@ -64,12 +82,16 @@ io.on('connection', async (client) => {
         });
 
         client.on('PROPOSEPLAY', (anotherSocketId) => {
-            if (!user) throw new Error('Please log in to create a game.');
-            client.to(anotherSocketId).emit('PROPOSEPLAY', {
-                connectionId,
-                login: user.login,
-                show: true,
-            });
+            try {
+                if (!user) throw new Error('Please log in to create a game.');
+                client.to(anotherSocketId).emit('PROPOSEPLAY', {
+                    connectionId,
+                    login: user.login,
+                    show: true,
+                });
+            } catch (e) {
+                client.emit('ERROR', e.message);
+            }
         });
 
         client.on('disconnect', () => {
